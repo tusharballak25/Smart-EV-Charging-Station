@@ -113,19 +113,13 @@ Smart-EV-Charging-Station/
 ![Flow Chart](images/flow_chart.png)
 
 ### Vehicle Node Circuit
-![Vehicle Node Circuit](images/vehicle_node_circuit.png)
+![Vehicle Node Circuit](images/circuits/station_controller_circuit.png)
 
 ### Station Controller Circuit
-![Station Controller Circuit](images/station_controller_circuit.png)
+![Station Controller Circuit](images/circuits/vehicle_node_circuit.png)
 
 ### Hardware Prototype
 ![Prototype](images/prototype.png)
-
-### User Dashboard
-![User Dashboard](images/user_dashboard.png)
-
-### Admin Dashboard
-![Admin Dashboard](images/admin_dashboard.png)
 
 
 ## Results
@@ -136,8 +130,14 @@ Smart-EV-Charging-Station/
 - Smart slot booking and dynamic pricing functionality were demonstrated through the web dashboard.
 - User and Admin dashboards provided centralized monitoring and control of the charging station.
 
+
 ## Project Demo
 [Watch Working Video](https://drive.google.com/file/d/1uITe59IkMRqmYF3rqKIGvO9TktbGh2aG/view?usp=drivesdk)
+
+
+## Project Report
+[View Full Project Report (PDF)](https://drive.google.com/file/d/1UPtFfBc1CUibjhvHr2X0nQ7Nr4lOBUqx/view?usp=drivesdk)
+
 
 ## Future Improvements
 - Integration with online payment gateways
