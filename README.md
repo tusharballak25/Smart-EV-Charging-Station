@@ -78,13 +78,13 @@ The ESP32 communicates with the HiveMQ Cloud MQTT broker over Wi-Fi, and the web
 
 ## Project Structure
 ```
-SMART EV CHARGING STATION/
+Smart-EV-Charging-Station/
 ├── dashboard/
 │   ├── admin.html
 │   └── user.html
 │
-├── demo/
-│   └── Project Working Video.mp4
+├── doc/
+│   └── Project Report.pdf
 │
 ├── firmware/
 │   ├── EV_NODE_V1_MQTT.ino
@@ -93,11 +93,12 @@ SMART EV CHARGING STATION/
 │   └── ev_station_firmware.ino
 │
 ├── images/
+│   ├── circuits/
+│   │   ├── station_controller_circuit.png
+│   │   └── vehicle_node_circuit.png
 │   ├── block_diagram.png
 │   ├── flow_chart.png
-│   ├── prototype.jpg
-│   ├── station_controller_circuit.png
-│   └── vehicle_node_circuit.png
+│   └── prototype.png
 │
 └── README.md
 ```
@@ -135,6 +136,8 @@ SMART EV CHARGING STATION/
 - Smart slot booking and dynamic pricing functionality were demonstrated through the web dashboard.
 - User and Admin dashboards provided centralized monitoring and control of the charging station.
 
+## Project Demo
+[Watch Working Video](https://drive.google.com/file/d/1uITe59IkMRqmYF3rqKIGvO9TktbGh2aG/view?usp=drivesdk)
 
 ## Future Improvements
 - Integration with online payment gateways
@@ -146,9 +149,9 @@ SMART EV CHARGING STATION/
 
 
 ## Authors
-- Tushar Ballak
-- Tejas Gangarde
-- Uday Gawande
 
+- [Tushar Ballak](https://github.com/tusharballak25)
+- Tejas Gangarde
+- [Uday Gawande](https://github.com/udaygawande93)
 
 
