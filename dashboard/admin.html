@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EV Admin Control Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080c10;--bg2:#0d1117;--bg3:#111820;--border:#1e2d3d;
+  --accent:#00d4ff;--accent2:#00ff88;--accent3:#ff6b35;
+  --warn:#ffcc00;--danger:#ff3b3b;--purple:#a78bfa;
+  --text:#c9d1d9;--text2:#8b949e;
+  --glow:0 0 20px rgba(0,212,255,0.3);--glow2:0 0 20px rgba(0,255,136,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,212,255,0.015) 2px,rgba(0,212,255,0.015) 4px);pointer-events:none;z-index:9999;}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:13px 24px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:38px;height:38px;border:2px solid var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',sans-serif;font-size:12px;color:var(--accent);animation:pb 2s ease-in-out infinite;}
+@keyframes pb{0%,100%{box-shadow:0 0 10px rgba(0,212,255,.3);}50%{box-shadow:0 0 25px rgba(0,212,255,.7);}}
+.logo h1{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;color:var(--accent);letter-spacing:3px;}
+.logo span{font-size:10px;color:var(--text2);letter-spacing:2px;}
+.hdr-right{display:flex;align-items:center;gap:18px;}
+.mqtt-status{display:flex;align-items:center;gap:7px;font-family:'Share Tech Mono',monospace;font-size:11px;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--danger);}
+.sdot.on{background:var(--accent2);box-shadow:0 0 9px var(--accent2);}
+.clock{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--accent);letter-spacing:2px;}
+
+.main{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding:18px 22px;max-width:1700px;margin:0 auto;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:16px;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.5;}
+.card.gb::before{background:linear-gradient(90deg,transparent,var(--accent2),transparent);}
+.card.ob::before{background:linear-gradient(90deg,transparent,var(--accent3),transparent);}
+.card.db::before{background:linear-gradient(90deg,transparent,var(--danger),transparent);}
+.card.pb::before{background:linear-gradient(90deg,transparent,var(--purple),transparent);}
+.ct{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:3px;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+.ct .d{width:5px;height:5px;border-radius:50%;background:var(--accent);}
+.ct .d.g{background:var(--accent2);}
+.ct .d.o{background:var(--accent3);}
+.ct .d.r{background:var(--danger);}
+.ct .d.p{background:var(--purple);}
+.col-full{grid-column:1/-1;}
+.col-2{grid-column:span 2;}
+
+/* STATION OVERVIEW */
+.stg{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;}
+.sbox{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:13px;text-align:center;}
+.sbox .sl{font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:6px;}
+.sbox .sv{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:700;color:var(--accent);}
+.sbox .su{font-size:10px;color:var(--text2);margin-top:2px;}
+.sbox.g .sv{color:var(--accent2);}
+.sbox.o .sv{color:var(--accent3);}
+.sbox.w .sv{color:var(--warn);}
+.sbox.r .sv{color:var(--danger);}
+.sbox.p .sv{color:var(--purple);}
+
+/* AI PRICING PANEL */
+.ai-pricing{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;}
+.ap-main{grid-column:span 2;background:var(--bg3);border-radius:8px;padding:14px;display:flex;align-items:center;gap:14px;border:1px solid var(--border);}
+.ap-price{font-family:'Orbitron',sans-serif;font-size:36px;font-weight:900;}
+.ap-price.peak{color:var(--warn);}
+.ap-price.normal{color:var(--accent);}
+.ap-price.eco{color:var(--accent2);}
+.ap-info h4{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;color:var(--text);}
+.ap-info p{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.5;}
+.ap-badge{display:inline-block;margin-top:5px;padding:2px 9px;border-radius:3px;font-size:9px;letter-spacing:2px;font-weight:700;}
+.ab-peak{background:rgba(255,204,0,.15);color:var(--warn);border:1px solid rgba(255,204,0,.3);}
+.ab-normal{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.3);}
+.ab-eco{background:rgba(0,255,136,.12);color:var(--accent2);border:1px solid rgba(0,255,136,.3);}
+.ap-stat{background:var(--bg3);border-radius:8px;padding:12px;border:1px solid var(--border);}
+.ap-stat .asl{font-size:9px;letter-spacing:1px;color:var(--text2);text-transform:uppercase;margin-bottom:5px;}
+.ap-stat .asv{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;}
+.ai-factors{grid-column:1/-1;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.2);border-radius:7px;padding:10px 14px;}
+.ai-factors-title{font-size:9px;letter-spacing:2px;color:var(--purple);margin-bottom:6px;text-transform:uppercase;}
+.af-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.af-item{background:var(--bg);border-radius:5px;padding:7px 10px;}
+.af-item .afl{font-size:9px;color:var(--text2);letter-spacing:1px;}
+.af-item .afv{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text);margin-top:2px;}
+.af-item .afv.up{color:var(--danger);}
+.af-item .afv.down{color:var(--accent2);}
+.ai-rec-admin{grid-column:1/-1;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.15);border-radius:6px;padding:9px 13px;font-size:11px;color:#ddd6fe;line-height:1.6;}
+
+/* AI LOAD PREDICTION */
+.pred-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;}
+.pred-card{background:var(--bg3);border-radius:7px;padding:12px;border:1px solid var(--border);}
+.pred-card .pc-icon{font-size:18px;margin-bottom:5px;}
+.pred-card .pc-val{font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--text);font-weight:700;}
+.pred-card .pc-lbl{font-size:9px;color:var(--text2);letter-spacing:1px;margin-top:3px;text-transform:uppercase;}
+.load-timeline{background:var(--bg3);border-radius:7px;padding:12px;border:1px solid var(--border);}
+.lt-title{font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:8px;}
+.lt-bars{display:flex;gap:4px;align-items:flex-end;height:60px;}
+.lt-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.lt-bar{width:100%;border-radius:3px 3px 0 0;transition:height .5s;min-height:4px;}
+.lt-bar.past{background:rgba(0,212,255,.3);}
+.lt-bar.now{background:var(--accent);box-shadow:0 0 8px var(--accent);}
+.lt-bar.pred{background:rgba(167,139,250,.5);}
+.lt-bar.peak-pred{background:rgba(255,204,0,.6);}
+.lt-label{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text2);}
+
+/* VEHICLE CARDS */
+.vcards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.vcard{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:14px;transition:border-color .3s;}
+.vcard.charging{border-color:rgba(0,255,136,.4);}
+.vcard.idle{border-color:var(--border);}
+.vcard.offline{border-color:rgba(255,59,59,.3);opacity:.6;}
+.vc-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.vc-id{font-family:'Orbitron',sans-serif;font-size:17px;font-weight:900;color:var(--accent);}
+.vc-badge{font-size:8px;letter-spacing:2px;padding:2px 7px;border-radius:3px;}
+.vcb-charging{background:rgba(0,255,136,.15);color:var(--accent2);border:1px solid rgba(0,255,136,.3);}
+.vcb-idle{background:rgba(139,148,158,.15);color:var(--text2);border:1px solid var(--border);}
+.vcb-offline{background:rgba(255,59,59,.15);color:var(--danger);border:1px solid rgba(255,59,59,.3);}
+.soc-bar{height:5px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--border);margin:8px 0;}
+.soc-fill{height:100%;border-radius:3px;transition:width .8s;background:linear-gradient(90deg,var(--accent),var(--accent2));}
+.soc-fill.low{background:linear-gradient(90deg,var(--danger),var(--warn));}
+.vc-stats{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;}
+.vs{background:var(--bg);border-radius:4px;padding:5px 7px;}
+.vs .k{font-size:8px;color:var(--text2);letter-spacing:1px;}
+.vs .v{font-family:'Share Tech Mono',monospace;font-size:12px;margin-top:2px;}
+/* Per-vehicle billing */
+.vc-bill{background:var(--bg);border-radius:5px;padding:7px 10px;margin-top:6px;border:1px solid rgba(0,212,255,.1);}
+.vc-bill .vb-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);padding:2px 0;}
+.vc-bill .vb-row span:last-child{font-family:'Share Tech Mono',monospace;color:var(--text);}
+.vc-bill .vb-total{color:var(--warn);font-weight:700;}
+.ts-row{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);margin-top:5px;}
+
+/* SLOTS TABLE */
+.stbl{width:100%;border-collapse:collapse;}
+.stbl th{font-size:8px;letter-spacing:2px;color:var(--text2);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg3);}
+.stbl td{padding:10px;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px;vertical-align:middle;}
+.stbl tr:last-child td{border-bottom:none;}
+.sch{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9px;letter-spacing:1px;font-weight:600;}
+.sch-chg{background:rgba(0,255,136,.2);color:var(--accent2);border:1px solid rgba(0,255,136,.4);}
+.sch-avail{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.2);}
+.sch-bkd{background:rgba(255,204,0,.1);color:var(--warn);border:1px solid rgba(255,204,0,.3);}
+.sch-off{background:rgba(255,59,59,.1);color:var(--danger);border:1px solid rgba(255,59,59,.2);}
+.relay-on{display:inline-flex;align-items:center;gap:3px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--accent2);background:rgba(0,255,136,.1);padding:2px 6px;border-radius:3px;border:1px solid rgba(0,255,136,.2);}
+.relay-off{display:inline-flex;align-items:center;gap:3px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);background:rgba(30,45,61,.8);padding:2px 6px;border-radius:3px;border:1px solid var(--border);}
+.pmini{height:3px;background:var(--bg);border-radius:2px;overflow:hidden;width:70px;margin-top:3px;}
+.pmini-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent2),var(--accent));}
+.bf{padding:4px 8px;border:none;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all .2s;font-family:'Rajdhani',sans-serif;text-transform:uppercase;}
+.bf-on{background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.3);color:var(--accent2);}
+.bf-on:hover{background:rgba(0,255,136,.3);}
+.bf-off{background:rgba(255,59,59,.15);border:1px solid rgba(255,59,59,.3);color:var(--danger);}
+.bf-off:hover{background:rgba(255,59,59,.3);}
+
+/* ADMIN CONTROLS */
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cb{padding:10px;border:none;border-radius:5px;font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s;text-transform:uppercase;width:100%;}
+.cb-kill{background:rgba(255,59,59,.15);border:2px solid rgba(255,59,59,.4);color:var(--danger);grid-column:1/-1;}
+.cb-kill:hover{background:rgba(255,59,59,.3);}
+.cb-pub{background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);color:var(--accent);}
+.cb-pub:hover{background:rgba(0,212,255,.2);}
+.cb-bak{background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.3);color:var(--warn);}
+.cb-bak:hover{background:rgba(255,204,0,.2);}
+.divider{height:1px;background:var(--border);margin:8px 0;}
+.clabel{font-size:9px;letter-spacing:2px;color:var(--text2);margin-bottom:5px;text-transform:uppercase;}
+
+/* ALERT LOG */
+.alog{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;}
+.alog::-webkit-scrollbar{width:3px;}
+.alog::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.ai{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-radius:4px;background:var(--bg3);border-left:3px solid var(--border);animation:sl .3s ease;}
+@keyframes sl{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+.ai.critical{border-left-color:var(--danger);background:rgba(255,59,59,.07);}
+.ai.warning{border-left-color:var(--warn);background:rgba(255,204,0,.05);}
+.ai.info{border-left-color:var(--accent);background:rgba(0,212,255,.04);}
+.at{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);white-space:nowrap;}
+.ac{font-size:10px;font-weight:700;letter-spacing:1px;}
+.am{font-size:10px;color:var(--text2);margin-top:1px;}
+.no-alerts{text-align:center;color:var(--text2);font-size:10px;letter-spacing:2px;padding:18px;}
+
+/* CHART */
+.chart-wrap{position:relative;height:150px;}
+
+/* BACKUP */
+.backup-ind{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:5px;margin-top:9px;background:var(--bg3);border:1px solid var(--border);transition:all .3s;}
+.backup-ind.active{border-color:rgba(255,204,0,.4);background:rgba(255,204,0,.07);}
+.bdot{width:9px;height:9px;border-radius:50%;background:var(--border);}
+.bdot.active{background:var(--warn);box-shadow:0 0 9px var(--warn);animation:blink 1s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.4;}}
+.btxt{font-size:11px;font-weight:600;letter-spacing:1px;}
+.lupd{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);text-align:right;margin-top:6px;}
+.grid-load-wrap{margin-top:9px;}
+.gll{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:3px;}
+.glb{height:7px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--border);}
+.glf{height:100%;border-radius:3px;transition:width 1s;background:linear-gradient(90deg,var(--accent2),var(--accent));}
+.glf.high{background:linear-gradient(90deg,var(--warn),var(--accent3));}
+.glf.critical{background:linear-gradient(90deg,var(--danger),var(--accent3));}
+
+/* TICKER */
+.ticker{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);overflow:hidden;white-space:nowrap;}
+.ticker span{display:inline-block;animation:tick 22s linear infinite;}
+@keyframes tick{0%{transform:translateX(100%);}100%{transform:translateX(-100%);}}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg2);border:1px solid var(--accent);border-radius:7px;padding:11px 18px;font-size:12px;color:var(--accent);z-index:9998;transform:translateY(100px);opacity:0;transition:all .3s;font-family:'Share Tech Mono',monospace;box-shadow:var(--glow);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.error{border-color:var(--danger);color:var(--danger);}
+
+/* REVENUE PANEL */
+.rev-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+.rev-box{background:var(--bg3);border-radius:7px;padding:12px;border:1px solid var(--border);}
+.rev-box .rl{font-size:9px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:5px;}
+.rev-box .rv{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:var(--accent2);}
+.rev-box .ru{font-size:10px;color:var(--text2);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">EV</div>
+    <div><h1>CONTROL CENTER</h1><span>ADMIN — PUNE HUB 01 · V5.1 · AI PRICING</span></div>
+  </div>
+  <div class="hdr-right">
+    <div class="mqtt-status">
+      <div class="sdot" id="mqttDot"></div>
+      <span id="mqttLabel" style="letter-spacing:1px;">DISCONNECTED</span>
+    </div>
+    <div style="background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);padding:4px 12px;border-radius:4px;font-size:10px;letter-spacing:2px;color:var(--purple);">AI ENGINE · ACTIVE</div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div style="background:var(--bg3);border-bottom:1px solid var(--border);padding:5px 22px;overflow:hidden;">
+  <div class="ticker"><span id="tickerText">⚡ PUNE HUB 01 · Waiting for data...</span></div>
+</div>
+
+<div class="main">
+
+  <!-- ═══ STATION OVERVIEW ═══ -->
+  <div class="card col-full">
+    <div class="ct"><div class="d"></div>STATION OVERVIEW — PUNE HUB 01</div>
+    <div class="stg">
+      <div class="sbox"><div class="sl">Input Voltage</div><div class="sv" id="stVoltage">--.-</div><div class="su">VOLTS</div></div>
+      <div class="sbox g"><div class="sl">Input Current</div><div class="sv" id="stCurrent">--.-</div><div class="su">AMPERES</div></div>
+      <div class="sbox o"><div class="sl">Station Power</div><div class="sv" id="stPower">---</div><div class="su">WATTS</div></div>
+      <div class="sbox w"><div class="sl">Active Slots</div><div class="sv" id="stActiveSlots">-</div><div class="su">OF 3</div></div>
+      <div class="sbox r"><div class="sl">Internal Temp</div><div class="sv" id="stTemp">--.-</div><div class="su">°C</div></div>
+      <div class="sbox p"><div class="sl">Total Energy</div><div class="sv" id="stTotalEnergy">--.-</div><div class="su">Wh TODAY</div></div>
+    </div>
+    <div class="grid-load-wrap">
+      <div class="gll"><span>GRID LOAD</span><span id="gridLoadPct">0%</span></div>
+      <div class="glb"><div class="glf" id="gridLoadBar" style="width:0%"></div></div>
+    </div>
+    <div class="backup-ind" id="backupInd">
+      <div class="bdot" id="backupDot"></div>
+      <div><div class="btxt" id="backupText">BACKUP BATTERY — STANDBY</div>
+      <div style="font-size:10px;color:var(--text2);margin-top:2px;">12V / 7Ah · Auto-activates at 2+ active slots</div></div>
+    </div>
+    <div class="lupd">Last update: <span id="stLastUpdate">--</span> &nbsp;|&nbsp; Device ts: <span id="stDeviceTs">--</span></div>
+  </div>
+
+  <!-- ═══ AI DYNAMIC PRICING PANEL ═══ -->
+  <div class="card col-full pb">
+    <div class="ct"><div class="d p"></div>AI DYNAMIC PRICING ENGINE — REAL-TIME</div>
+    <div class="ai-pricing" id="aiPricingGrid">
+      <div class="ap-main">
+        <div class="ap-price normal" id="apPrice">₹10.00</div>
+        <div class="ap-info">
+          <h4>CURRENT RATE / kWh</h4>
+          <p id="apReason">Calculating...</p>
+          <span class="ap-badge ab-normal" id="apBadge">◉ NORMAL</span>
+        </div>
+      </div>
+      <div class="ap-stat"><div class="asl">Load Level</div><div class="asv" id="apLoad" style="color:var(--accent);">--%</div></div>
+      <div class="ap-stat"><div class="asl">Next Hr Est.</div><div class="asv" id="apNextPrice" style="color:var(--text2);">₹--</div></div>
+      <div class="ai-factors">
+        <div class="ai-factors-title">🧠 Pricing Factor Breakdown</div>
+        <div class="af-grid">
+          <div class="af-item"><div class="afl">TIME OF DAY</div><div class="afv" id="afTime">--:-- (-)</div></div>
+          <div class="af-item"><div class="afl">LOAD FACTOR</div><div class="afv" id="afLoadFactor">--</div></div>
+          <div class="af-item"><div class="afl">SLOT OCCUPANCY</div><div class="afv" id="afOccupancy">-/3 (-)</div></div>
+          <div class="af-item"><div class="afl">SURCHARGE</div><div class="afv" id="afSurcharge">₹0</div></div>
+        </div>
+      </div>
+      <div class="ai-rec-admin" id="aiRecAdmin">🧠 Connecting to AI pricing engine...</div>
+    </div>
+  </div>
+
+  <!-- ═══ AI LOAD PREDICTION ═══ -->
+  <div class="card col-2 pb">
+    <div class="ct"><div class="d p"></div>AI LOAD PREDICTION — NEXT 6 HOURS</div>
+    <div class="pred-grid">
+      <div class="pred-card"><div class="pc-icon">📊</div><div class="pc-val" id="predLoad1h">-- W</div><div class="pc-lbl">Predicted (1hr)</div></div>
+      <div class="pred-card"><div class="pc-icon">⏰</div><div class="pc-val" id="predPeakTime">--:--</div><div class="pc-lbl">Peak Demand</div></div>
+      <div class="pred-card"><div class="pc-icon">🔮</div><div class="pc-val" id="predWait">-- min</div><div class="pc-lbl">Predicted Wait</div></div>
+      <div class="pred-card"><div class="pc-icon">⚖️</div><div class="pc-val" id="predBalance">OK</div><div class="pc-lbl">Load Balance</div></div>
+    </div>
+    <div class="load-timeline">
+      <div class="lt-title">LOAD FORECAST TIMELINE (hourly)</div>
+      <div class="lt-bars" id="ltBars">
+        <!-- generated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ REVENUE PANEL ═══ -->
+  <div class="card ob">
+    <div class="ct"><div class="d o"></div>REVENUE & BILLING</div>
+    <div class="rev-grid">
+      <div class="rev-box"><div class="rl">Today Revenue</div><div class="rv" id="revToday">₹0.00</div><div class="ru">ESTIMATED</div></div>
+      <div class="rev-box"><div class="rl">Sessions Today</div><div class="rv" id="revSessions" style="color:var(--accent);">0</div><div class="ru">COMPLETED</div></div>
+      <div class="rev-box"><div class="rl">Energy Sold</div><div class="rv" id="revEnergy" style="color:var(--accent3);">0.000</div><div class="ru">kWh</div></div>
+      <div class="rev-box"><div class="rl">Avg Rate</div><div class="rv" id="revAvgRate" style="color:var(--warn);">₹--</div><div class="ru">PER kWh</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ VEHICLE CARDS ═══ -->
+  <div class="card col-full gb">
+    <div class="ct"><div class="d g"></div>VEHICLE BATTERY NODES — CHARGING PARAMETERS</div>
+    <div class="vcards">
+      <!-- V1: EV1 12V 5A -->
+      <div class="vcard offline" id="vcard_V1">
+        <div class="vc-hdr">
+          <div><div class="vc-id">V1</div><div style="font-size:9px;color:var(--text2);margin-top:1px;">EV1 · 12V / 5A MAX · 60W</div></div>
+          <div class="vc-badge vcb-offline" id="vbadge_V1">OFFLINE</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);"><span>SOC</span><span id="vsoc_V1">--%</span></div>
+        <div class="soc-bar"><div class="soc-fill" id="vfill_V1" style="width:0%"></div></div>
+        <div class="vc-stats">
+          <div class="vs"><div class="k">VOLTAGE</div><div class="v" id="vvolt_V1">-- V</div></div>
+          <div class="vs"><div class="k">CURRENT (AVG)</div><div class="v" id="vcurr_V1">-- A</div></div>
+          <div class="vs"><div class="k">POWER</div><div class="v" id="vpow_V1">-- W</div></div>
+          <div class="vs"><div class="k">TEMP</div><div class="v" id="vtemp_V1">-- °C</div></div>
+          <div class="vs"><div class="k">CHARGE TIME</div><div class="v" id="vtime_V1">-- min</div></div>
+          <div class="vs"><div class="k">CHG MODE</div><div class="v" id="vmode_V1">--</div></div>
+        </div>
+        <div class="vc-bill" id="vbill_V1">
+          <div class="vb-row"><span>Rate</span><span id="vbrate_V1">₹--</span></div>
+          <div class="vb-row"><span>Energy</span><span id="vbenergy_V1">-- Wh</span></div>
+          <div class="vb-row vb-total"><span>Cost</span><span id="vbcost_V1">₹--</span></div>
+        </div>
+        <div class="ts-row" id="vts_V1">ts: —</div>
+        <div style="margin-top:7px;"><button class="bf cb-pub" onclick="sendVehicleCmd('V1','REBOOT')" style="padding:5px 10px;font-size:10px;">⟳ REBOOT</button></div>
+      </div>
+      <!-- V2: EV2 12V 3.5A -->
+      <div class="vcard offline" id="vcard_V2">
+        <div class="vc-hdr">
+          <div><div class="vc-id" style="color:var(--accent2);">V2</div><div style="font-size:9px;color:var(--text2);margin-top:1px;">EV2 · 12V / 3.5A MAX · 42W</div></div>
+          <div class="vc-badge vcb-offline" id="vbadge_V2">OFFLINE</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);"><span>SOC</span><span id="vsoc_V2">--%</span></div>
+        <div class="soc-bar"><div class="soc-fill" id="vfill_V2" style="width:0%"></div></div>
+        <div class="vc-stats">
+          <div class="vs"><div class="k">VOLTAGE</div><div class="v" id="vvolt_V2">-- V</div></div>
+          <div class="vs"><div class="k">CURRENT (AVG)</div><div class="v" id="vcurr_V2">-- A</div></div>
+          <div class="vs"><div class="k">POWER</div><div class="v" id="vpow_V2">-- W</div></div>
+          <div class="vs"><div class="k">TEMP</div><div class="v" id="vtemp_V2">-- °C</div></div>
+          <div class="vs"><div class="k">CHARGE TIME</div><div class="v" id="vtime_V2">-- min</div></div>
+          <div class="vs"><div class="k">CHG MODE</div><div class="v" id="vmode_V2">--</div></div>
+        </div>
+        <div class="vc-bill" id="vbill_V2">
+          <div class="vb-row"><span>Rate</span><span id="vbrate_V2">₹--</span></div>
+          <div class="vb-row"><span>Energy</span><span id="vbenergy_V2">-- Wh</span></div>
+          <div class="vb-row vb-total"><span>Cost</span><span id="vbcost_V2">₹--</span></div>
+        </div>
+        <div class="ts-row" id="vts_V2">ts: —</div>
+        <div style="margin-top:7px;"><button class="bf cb-pub" onclick="sendVehicleCmd('V2','REBOOT')" style="padding:5px 10px;font-size:10px;">⟳ REBOOT</button></div>
+      </div>
+      <!-- V3: EV3 12V 2.2A -->
+      <div class="vcard offline" id="vcard_V3">
+        <div class="vc-hdr">
+          <div><div class="vc-id" style="color:var(--accent3);">V3</div><div style="font-size:9px;color:var(--text2);margin-top:1px;">EV3 · 12V / 2.2A MAX · 26.4W</div></div>
+          <div class="vc-badge vcb-offline" id="vbadge_V3">OFFLINE</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);"><span>SOC</span><span id="vsoc_V3">--%</span></div>
+        <div class="soc-bar"><div class="soc-fill" id="vfill_V3" style="width:0%"></div></div>
+        <div class="vc-stats">
+          <div class="vs"><div class="k">VOLTAGE</div><div class="v" id="vvolt_V3">-- V</div></div>
+          <div class="vs"><div class="k">CURRENT (AVG)</div><div class="v" id="vcurr_V3">-- A</div></div>
+          <div class="vs"><div class="k">POWER</div><div class="v" id="vpow_V3">-- W</div></div>
+          <div class="vs"><div class="k">TEMP</div><div class="v" id="vtemp_V3">-- °C</div></div>
+          <div class="vs"><div class="k">CHARGE TIME</div><div class="v" id="vtime_V3">-- min</div></div>
+          <div class="vs"><div class="k">CHG MODE</div><div class="v" id="vmode_V3">--</div></div>
+        </div>
+        <div class="vc-bill" id="vbill_V3">
+          <div class="vb-row"><span>Rate</span><span id="vbrate_V3">₹--</span></div>
+          <div class="vb-row"><span>Energy</span><span id="vbenergy_V3">-- Wh</span></div>
+          <div class="vb-row vb-total"><span>Cost</span><span id="vbcost_V3">₹--</span></div>
+        </div>
+        <div class="ts-row" id="vts_V3">ts: —</div>
+        <div style="margin-top:7px;"><button class="bf cb-pub" onclick="sendVehicleCmd('V3','REBOOT')" style="padding:5px 10px;font-size:10px;">⟳ REBOOT</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLOT MANAGEMENT ═══ -->
+  <div class="card col-2 ob">
+    <div class="ct"><div class="d o"></div>SLOT MANAGEMENT — LIVE</div>
+    <table class="stbl">
+      <thead><tr>
+        <th>SLOT</th><th>STATUS</th><th>RELAY</th><th>CUSTOMER</th><th>VEHICLE</th>
+        <th>REMAINING</th><th>ENERGY</th><th>RATE</th><th>COST</th><th>ACTIONS</th>
+      </tr></thead>
+      <tbody id="slotsBody">
+        <tr><td colspan="10" style="text-align:center;color:var(--text2);padding:22px;font-size:11px;letter-spacing:2px;">WAITING FOR STATION DATA...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ CONTROLS ═══ -->
+  <div class="card db">
+    <div class="ct"><div class="d r"></div>STATION CONTROLS</div>
+    <button class="cb cb-kill" onclick="sendGlobalKill()">⛔ GLOBAL EMERGENCY KILL</button>
+    <div class="divider"></div>
+    <div class="clabel">Slot Force Controls</div>
+    <div class="cg">
+      <button class="cb cb-pub" onclick="forceSlot(1,true)">SLOT 1 ON</button>
+      <button class="cb" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.3);color:var(--danger);" onclick="forceSlot(1,false)">SLOT 1 OFF</button>
+      <button class="cb cb-pub" onclick="forceSlot(2,true)">SLOT 2 ON</button>
+      <button class="cb" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.3);color:var(--danger);" onclick="forceSlot(2,false)">SLOT 2 OFF</button>
+      <button class="cb cb-pub" onclick="forceSlot(3,true)">SLOT 3 ON</button>
+      <button class="cb" style="background:rgba(255,59,59,.1);border:1px solid rgba(255,59,59,.3);color:var(--danger);" onclick="forceSlot(3,false)">SLOT 3 OFF</button>
+    </div>
+    <div class="divider"></div>
+    <div class="clabel">Vehicle Commands</div>
+    <div class="cg">
+      <button class="cb cb-pub" onclick="sendVehicleCmd('V1','REBOOT')">REBOOT V1</button>
+      <button class="cb cb-pub" onclick="sendVehicleCmd('V2','REBOOT')">REBOOT V2</button>
+      <button class="cb cb-pub" onclick="sendVehicleCmd('V3','REBOOT')">REBOOT V3</button>
+      <button class="cb cb-bak" onclick="sendVehicleCmd('ALL','REBOOT')">REBOOT ALL</button>
+    </div>
+  </div>
+
+  <!-- ═══ POWER CHART ═══ -->
+  <div class="card col-2">
+    <div class="ct"><div class="d"></div>STATION POWER — LIVE (30 readings)</div>
+    <div class="chart-wrap"><canvas id="powerChart"></canvas></div>
+  </div>
+
+  <!-- ═══ ALERTS LOG ═══ -->
+  <div class="card">
+    <div class="ct"><div class="d" style="background:var(--warn)"></div>ALERTS LOG</div>
+    <div class="alog" id="alertsLog"><div class="no-alerts">NO ALERTS YET</div></div>
+  </div>
+
+  <!-- ═══ SOC CHART ═══ -->
+  <div class="card col-full gb">
+    <div class="ct"><div class="d g"></div>VEHICLE SOC HISTORY (last 30)</div>
+    <div class="chart-wrap" style="height:130px;"><canvas id="socChart"></canvas></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  MQTT CONFIG
+// ══════════════════════════════════════════════════════
+const MQTT_HOST = 'wss://dd4770b26a7d4a7291371cea6d74c060.s1.eu.hivemq.cloud:8884/mqtt';
+const MQTT_USER = 'admin';
+const MQTT_PASS = 'Pass@123';
+const TOPICS = {
+  stationTelemetry:'ev_station/telemetry', stationAlerts:'ev_station/alerts',
+  stationCommands:'ev_station/commands',   stationBookings:'ev_station/bookings',
+  v1Telemetry:'ev_vehicle/v1/telemetry',  v2Telemetry:'ev_vehicle/v2/telemetry',
+  v3Telemetry:'ev_vehicle/v3/telemetry',  v1Commands:'ev_vehicle/v1/commands',
+  v2Commands:'ev_vehicle/v2/commands',    v3Commands:'ev_vehicle/v3/commands',
+};
+
+// EV specs
+const EV_SPECS = {1:{name:'EV1',voltage:12,maxA:5,maxW:60}, 2:{name:'EV2',voltage:12,maxA:3.5,maxW:42}, 3:{name:'EV3',voltage:12,maxA:2.2,maxW:26.4}};
+const STATION_MAX_W = 128.4;
+const BASE_PRICE = 10;
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let client = null;
+let stationData = null;
+let vehicleData = {V1:null,V2:null,V3:null};
+let vehicleTimeout = {V1:null,V2:null,V3:null};
+let currentPrice = BASE_PRICE;
+let pricingMode  = 'normal';
+
+// Revenue tracking (session-based, resets on reload)
+let revTodayTotal = 0;
+let revSessCount  = 0;
+let revEnergyTotal= 0;
+
+const MAX_PTS = 30;
+let powerHistory = [];
+let socHistory   = {V1:[],V2:[],V3:[]};
+
+// ══════════════════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════════════════
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+}, 1000);
+
+// ══════════════════════════════════════════════════════
+//  AI DYNAMIC PRICING ENGINE (same logic as user panel)
+// ══════════════════════════════════════════════════════
+function computeDynamicPrice(d) {
+  const hour       = new Date().getHours();
+  const totalPower = d?.station_power || 0;
+  const activeSlots= d?.active_slots  || 0;
+  const loadPct    = Math.min(100, (totalPower / STATION_MAX_W) * 100);
+
+  let price = BASE_PRICE, mode = 'normal', surcharge = 0;
+  let reasons = [], factors = [];
+
+  // Time factor
+  let timeSurcharge = 0, timeLabel = '';
+  if (hour >= 18 && hour <= 22) {
+    timeSurcharge = 3; timeLabel = 'PEAK (6-10PM)'; mode = 'peak';
+  } else if (hour >= 23 || hour <= 5) {
+    timeSurcharge = -2; timeLabel = 'OFF-PEAK'; if (mode!=='peak') mode='eco';
+  } else if (hour >= 9 && hour <= 12) {
+    timeSurcharge = 1; timeLabel = 'MORNING';
+  } else { timeLabel = 'NORMAL'; }
+  surcharge += timeSurcharge;
+  if (timeSurcharge > 0) reasons.push(`+₹${timeSurcharge} ${timeLabel}`);
+  else if (timeSurcharge < 0) reasons.push(`₹${timeSurcharge} ${timeLabel}`);
+
+  // Load factor
+  let loadSurcharge = 0, loadLabel = '';
+  if (loadPct > 80) { loadSurcharge = 2; loadLabel = 'HIGH (>80%)'; mode='peak'; }
+  else if (loadPct < 40) { loadSurcharge = -1; loadLabel = 'LOW (<40%)'; if (mode!=='peak') mode='eco'; }
+  else { loadLabel = 'NORMAL'; }
+  surcharge += loadSurcharge;
+  if (loadSurcharge !== 0) reasons.push(`${loadSurcharge>0?'+':''}₹${loadSurcharge} load`);
+
+  // Occupancy
+  let occSurcharge = 0, occLabel = '';
+  if (activeSlots === 3) { occSurcharge = 2; occLabel = '3/3 FULL'; mode='peak'; }
+  else if (activeSlots === 0) { occSurcharge = -1; occLabel = '0/3 EMPTY'; if (mode!=='peak') mode='eco'; }
+  else { occLabel = `${activeSlots}/3`; }
+  surcharge += occSurcharge;
+  if (occSurcharge !== 0) reasons.push(`${occSurcharge>0?'+':''}₹${occSurcharge} occupancy`);
+
+  price = Math.max(7, Math.min(18, BASE_PRICE + surcharge));
+
+  const nextHour = (hour+1)%24;
+  let nextPrice = BASE_PRICE;
+  if (nextHour >= 18 && nextHour <= 22) nextPrice = BASE_PRICE + 3;
+  else if (nextHour >= 23 || nextHour <= 5) nextPrice = BASE_PRICE - 2;
+
+  const modeMap   = {peak:'⚡ PEAK DEMAND', normal:'◉ NORMAL RATE', eco:'🌙 ECO RATE'};
+  const badgeMap  = {peak:'ab-peak', normal:'ab-normal', eco:'ab-eco'};
+
+  const aiRec = `🧠 <strong>AI Engine:</strong> Price set to ₹${price.toFixed(2)}/kWh [${modeMap[mode]}]. `
+    + (reasons.length ? `Factors: ${reasons.join(', ')}.` : 'Base rate active.')
+    + (mode==='peak' ? ' ⚠ Grid near capacity — recommend reducing Slot 3 power to conserve load.' : '')
+    + (mode==='eco' ? ' ✅ Low demand — full charging speed available at discounted rate.' : '');
+
+  const predLoad = mode==='peak' ? totalPower*1.25 : mode==='eco' ? totalPower*0.8 : totalPower*1.05;
+  const minRem = (() => {
+    let m=999;
+    // would need slotData — approximate
+    return m === 999 ? 0 : m;
+  })();
+  const waitTime = activeSlots < 3 ? 0 : 15;
+  const peakTime = hour < 18 ? '18:00' : hour < 22 ? (hour+1)+':00' : '06:00';
+  const balanceOk = loadPct < 85;
+
+  return { price, mode, surcharge, reasons, aiRec, nextPrice, predLoad, waitTime, peakTime,
+           loadPct, balanceOk, timeLabel, loadLabel, occLabel, badgeMap };
+}
+
+function updatePricingUI(d) {
+  const r = computeDynamicPrice(d);
+  currentPrice = r.price;
+  pricingMode  = r.mode;
+
+  // Price display
+  const priceEl = document.getElementById('apPrice');
+  priceEl.textContent = '₹' + r.price.toFixed(2);
+  priceEl.className   = 'ap-price ' + r.mode;
+  document.getElementById('apReason').textContent  = r.reasons.length ? r.reasons.join(' · ') : 'Base rate — no surcharge factors';
+  const badge = document.getElementById('apBadge');
+  badge.className   = 'ap-badge ' + r.badgeMap[r.mode];
+  badge.textContent = r.mode === 'peak' ? '⚡ PEAK' : r.mode === 'eco' ? '🌙 ECO' : '◉ NORMAL';
+  document.getElementById('apLoad').textContent     = r.loadPct.toFixed(0) + '%';
+  document.getElementById('apNextPrice').textContent= '₹' + r.nextPrice.toFixed(2);
+  document.getElementById('aiRecAdmin').innerHTML   = r.aiRec;
+
+  // Factor breakdown
+  const hour = new Date().getHours();
+  document.getElementById('afTime').textContent       = `${String(hour).padStart(2,'0')}:00 (${r.timeLabel})`;
+  document.getElementById('afTime').className         = 'afv' + (r.timeLabel==='PEAK (6-10PM)'?' up':r.timeLabel==='OFF-PEAK'?' down':'');
+  document.getElementById('afLoadFactor').textContent = r.loadPct.toFixed(0)+'% ('+r.loadLabel+')';
+  document.getElementById('afLoadFactor').className   = 'afv' + (r.loadPct>80?' up':r.loadPct<40?' down':'');
+  document.getElementById('afOccupancy').textContent  = r.occLabel;
+  document.getElementById('afSurcharge').textContent  = (r.surcharge>=0?'+':'')+'₹'+r.surcharge;
+  document.getElementById('afSurcharge').className    = 'afv' + (r.surcharge>0?' up':r.surcharge<0?' down':'');
+
+  // Load prediction
+  document.getElementById('predLoad1h').textContent  = r.predLoad.toFixed(1)+' W';
+  document.getElementById('predPeakTime').textContent= r.peakTime;
+  document.getElementById('predWait').textContent    = r.waitTime+' min';
+  document.getElementById('predBalance').textContent = r.balanceOk ? '✅ OK' : '⚠ HIGH';
+  document.getElementById('predBalance').style.color = r.balanceOk ? 'var(--accent2)' : 'var(--danger)';
+
+  // Load timeline bars
+  buildTimelineBars(d?.station_power||0, r);
+
+  // Avg rate for revenue panel
+  document.getElementById('revAvgRate').textContent = '₹'+currentPrice.toFixed(2);
+}
+
+function buildTimelineBars(currentW, r) {
+  const hour = new Date().getHours();
+  const bars = [];
+  for (let i = -2; i <= 5; i++) {
+    const h = (hour + i + 24) % 24;
+    let loadPct;
+    if (i < 0) { loadPct = Math.max(10, (currentW/STATION_MAX_W)*100 * (0.8 + Math.random()*0.3)); }
+    else if (i === 0) { loadPct = (currentW/STATION_MAX_W)*100; }
+    else {
+      const isPeak = (h >= 18 && h <= 22);
+      const isOff  = (h >= 23 || h <= 5);
+      const base   = (currentW/STATION_MAX_W)*100;
+      loadPct = isPeak ? Math.min(100, base*1.3) : isOff ? base*0.5 : base*(0.9+i*0.05);
+    }
+    bars.push({hour:h, loadPct:Math.max(5,Math.round(loadPct)), isPast:i<0, isNow:i===0, isPeakHour:(h>=18&&h<=22)});
+  }
+  const container = document.getElementById('ltBars');
+  container.innerHTML = bars.map(b => {
+    const cls = b.isNow ? 'now' : b.isPast ? 'past' : b.isPeakHour ? 'peak-pred' : 'pred';
+    return `<div class="lt-bar-wrap">
+      <div class="lt-bar ${cls}" style="height:${b.loadPct}%;"></div>
+      <div class="lt-label">${String(b.hour).padStart(2,'0')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  CHARGING MODE per EV spec
+// ══════════════════════════════════════════════════════
+function getChargingMode(current, maxCurrent) {
+  const ratio = current / maxCurrent;
+  if (ratio > 0.8)  return '⚡ FAST';
+  if (ratio > 0.4)  return '◉ NORMAL';
+  if (ratio > 0.05) return '🌙 ECO';
+  return '— IDLE';
+}
+
+// ══════════════════════════════════════════════════════
+//  VEHICLE BILLING
+// ══════════════════════════════════════════════════════
+function updateVehicleBilling(id, d, slotNum) {
+  const rate     = currentPrice;
+  const energyWh = d.energy_wh || 0;
+  const cost     = (energyWh / 1000) * rate;
+  setText('vbrate_'  +id, '₹'+rate.toFixed(2)+'/kWh');
+  setText('vbenergy_'+id, energyWh.toFixed(2)+' Wh');
+  setText('vbcost_'  +id, '₹'+cost.toFixed(3));
+}
+
+// ══════════════════════════════════════════════════════
+//  MQTT
+// ══════════════════════════════════════════════════════
+function connectMQTT() {
+  const opts = {username:MQTT_USER,password:MQTT_PASS,clientId:'admin_'+Math.random().toString(16).slice(2,8),clean:true,reconnectPeriod:3000,connectTimeout:10000};
+  client = mqtt.connect(MQTT_HOST, opts);
+  client.on('connect', () => {
+    setMQTTStatus(true);
+    Object.entries(TOPICS).forEach(([k,t]) => { if (!t.includes('commands')) client.subscribe(t,{qos:1}); });
+    showToast('MQTT Connected');
+  });
+  client.on('disconnect', () => setMQTTStatus(false));
+  client.on('error',      () => setMQTTStatus(false));
+  client.on('offline',    () => setMQTTStatus(false));
+  client.on('message', (topic, payload) => {
+    try { handleMessage(topic, JSON.parse(payload.toString())); } catch(e){}
+  });
+}
+
+function setMQTTStatus(ok) {
+  document.getElementById('mqttDot').className    = 'sdot'+(ok?' on':'');
+  document.getElementById('mqttLabel').textContent = ok ? 'CONNECTED' : 'DISCONNECTED';
+}
+
+function handleMessage(topic, data) {
+  if      (topic===TOPICS.stationTelemetry) updateStation(data);
+  else if (topic===TOPICS.stationAlerts)    addAlert(data);
+  else if (topic===TOPICS.v1Telemetry)      updateVehicle('V1', data, 1);
+  else if (topic===TOPICS.v2Telemetry)      updateVehicle('V2', data, 2);
+  else if (topic===TOPICS.v3Telemetry)      updateVehicle('V3', data, 3);
+}
+
+// ══════════════════════════════════════════════════════
+//  STATION UPDATE
+// ══════════════════════════════════════════════════════
+function updateStation(d) {
+  stationData = d;
+  setText('stVoltage', (d.input_voltage||0).toFixed(2));
+  setText('stCurrent', (d.input_current||0).toFixed(2));
+  setText('stPower',   (d.station_power||0).toFixed(1));
+  setText('stActiveSlots', d.active_slots||0);
+
+  const tc = d.internal_temp_c||0;
+  const tempEl = document.getElementById('stTemp');
+  if (tempEl) { tempEl.textContent=tc.toFixed(1); tempEl.style.color=tc>=50?'var(--danger)':tc>=40?'var(--warn)':'var(--accent2)'; }
+
+  // Total energy from all active slots
+  let totalEnergy = 0;
+  const slots = d.slots || {};
+  ['Slot-01','Slot-02','Slot-03'].forEach(k => { totalEnergy += (slots[k]?.energy_wh||0); });
+  document.getElementById('stTotalEnergy').textContent = totalEnergy.toFixed(1);
+
+  // Grid load
+  const load = d.grid?.load||0;
+  setText('gridLoadPct', load+'%');
+  const glb = document.getElementById('gridLoadBar');
+  glb.style.width = load+'%';
+  glb.className   = 'glf'+(load>80?' critical':load>60?' high':'');
+
+  // Backup
+  const bi=document.getElementById('backupInd'), bd=document.getElementById('backupDot'), bt=document.getElementById('backupText');
+  if (d.backup_battery_active) { bi.classList.add('active'); bd.classList.add('active'); bt.textContent='⚡ BACKUP BATTERY — ACTIVE'; bt.style.color='var(--warn)'; }
+  else { bi.classList.remove('active'); bd.classList.remove('active'); bt.textContent='BACKUP BATTERY — STANDBY'; bt.style.color=''; }
+
+  setText('stLastUpdate', new Date().toLocaleTimeString('en-IN'));
+  setText('stDeviceTs', d.timestamp||'—');
+
+  // Power chart
+  pushChart(powerHistory, d.station_power||0);
+  powerChart.data.datasets[0].data = [...powerHistory];
+  powerChart.data.labels = powerHistory.map(()=>'');
+  powerChart.update('none');
+
+  // AI pricing + prediction
+  updatePricingUI(d);
+
+  // Slots table
+  updateSlotsTable(d.slots||{});
+
+  // Ticker
+  document.getElementById('tickerText').textContent =
+    `⚡ PUNE HUB 01  ·  ${(d.station_power||0).toFixed(1)}W  ·  Active:${d.active_slots||0}/3  ·  Temp:${tc.toFixed(1)}°C  ·  Rate:₹${currentPrice.toFixed(2)}/kWh  ·  Mode:${pricingMode.toUpperCase()}  ·  Backup:${d.backup_battery_active?'ACTIVE':'STANDBY'}  ·  ts:${d.timestamp||'—'}`;
+}
+
+// ══════════════════════════════════════════════════════
+//  SLOTS TABLE
+// ══════════════════════════════════════════════════════
+function updateSlotsTable(slots) {
+  const tbody = document.getElementById('slotsBody');
+  const keys  = ['Slot-01','Slot-02','Slot-03'];
+  let html    = '';
+  keys.forEach((k,i) => {
+    const n          = i+1;
+    const s          = slots[k]||{};
+    const status     = s.status||'Available';
+    const relayOn    = !!s.relay_on;
+    const charging   = !!s.charging;
+    const inaFault   = !!s.ina_fault;
+    const energyWh   = s.energy_wh||0;
+    const cost       = (energyWh/1000) * currentPrice;
+    const specs      = EV_SPECS[n];
+
+    let chipClass='sch-avail', chipLabel='AVAILABLE';
+    if (status==='Occupied') {
+      if (charging)      { chipClass='sch-chg';  chipLabel='⚡ CHARGING'; }
+      else if (inaFault) { chipClass='sch-off';  chipLabel='⚠ INA FAULT'; }
+      else               { chipClass='sch-off';  chipLabel='⏸ RELAY OFF'; }
+    } else if (status==='Booked') { chipClass='sch-bkd'; chipLabel='BOOKED'; }
+
+    const relayHtml = relayOn
+      ? `<span class="relay-on">⚡ ON</span>`
+      : `<span class="relay-off">— OFF</span>`;
+
+    const remPct = s.duration_mins>0 ? Math.max(0,Math.min(100,(s.remaining_mins/s.duration_mins)*100)) : 0;
+
+    // Charging mode from current vs max
+    const chgMode = charging ? getChargingMode(s.current||0, specs.maxA) : '—';
+
+    html += `<tr>
+      <td style="font-family:'Orbitron',sans-serif;font-size:13px;color:var(--accent);">S${n}<br><span style="font-size:8px;color:var(--text2);">${specs.name}</span></td>
+      <td><span class="sch ${chipClass}">${chipLabel}</span></td>
+      <td>${relayHtml}</td>
+      <td style="color:var(--text);">${s.customer||'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);">${s.vehicle_num||'—'}</td>
+      <td>${s.remaining_mins>0?`<span style="color:var(--accent2);font-family:'Share Tech Mono',monospace;">${s.remaining_mins} min</span><div class="pmini"><div class="pmini-fill" style="width:${remPct}%"></div></div>`:'—'}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent);">${energyWh.toFixed(2)} Wh</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--warn);">₹${currentPrice.toFixed(2)}</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent2);">${charging?'₹'+cost.toFixed(3):'—'}</td>
+      <td><div style="display:flex;gap:4px;">
+        <button class="bf bf-on"  onclick="forceSlot(${n},true)">ON</button>
+        <button class="bf bf-off" onclick="forceSlot(${n},false)">OFF</button>
+      </div></td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════
+//  VEHICLE UPDATE
+// ══════════════════════════════════════════════════════
+function updateVehicle(id, d, slotNum) {
+  vehicleData[id] = d;
+  if (vehicleTimeout[id]) clearTimeout(vehicleTimeout[id]);
+  vehicleTimeout[id] = setTimeout(() => markVehicleOffline(id), 8000);
+
+  const status = (d.status||'Idle').toLowerCase();
+  const soc    = d.soc||0;
+  const specs  = EV_SPECS[slotNum];
+
+  document.getElementById('vcard_'+id).className  = 'vcard '+status;
+  const badge = document.getElementById('vbadge_'+id);
+  badge.className   = 'vc-badge vcb-'+status;
+  badge.textContent = (d.status||'IDLE').toUpperCase();
+
+  setText('vsoc_'+id, soc+'%');
+  const fill = document.getElementById('vfill_'+id);
+  fill.style.width = soc+'%'; fill.className = 'soc-fill'+(soc<20?' low':'');
+
+  setText('vvolt_'+id, (d.voltage||0).toFixed(3)+' V');
+  setText('vcurr_'+id, (d.current||0).toFixed(3)+' A');
+  setText('vpow_' +id, (d.power  ||0).toFixed(2) +' W');
+  setText('vtemp_'+id, (d.temperature||0).toFixed(1)+' °C');
+
+  // Charging mode based on relay state and current vs spec
+  const chgMode = (status==='charging') ? getChargingMode(d.current||0, specs.maxA) : '— IDLE';
+  setText('vmode_'+id, chgMode);
+
+  let timeStr = '—';
+  if (d.charging_detected && d.time_to_full>0)   timeStr = d.time_to_full+' min TTF';
+  else if (!d.charging_detected && d.time_to_empty>0) timeStr = d.time_to_empty+' min TTE';
+  setText('vtime_'+id, timeStr);
+
+  // Billing per vehicle
+  updateVehicleBilling(id, d, slotNum);
+
+  // Timestamp
+  const tsEl = document.getElementById('vts_'+id);
+  if (tsEl) tsEl.textContent = 'ts: '+(d.timestamp||'—');
+
+  // SOC chart
+  pushChart(socHistory[id], soc);
+  socChart.data.datasets[['V1','V2','V3'].indexOf(id)].data = [...socHistory[id]];
+  socChart.update('none');
+}
+
+function markVehicleOffline(id) {
+  vehicleData[id]=null;
+  document.getElementById('vcard_'+id).className  = 'vcard offline';
+  const badge = document.getElementById('vbadge_'+id);
+  badge.className='vc-badge vcb-offline'; badge.textContent='OFFLINE';
+  ['vsoc','vvolt','vcurr','vpow','vtemp','vtime','vmode'].forEach(k => { const el=document.getElementById(k+'_'+id); if(el) el.textContent='—'; });
+  document.getElementById('vfill_'+id).style.width='0%';
+  const ts=document.getElementById('vts_'+id); if(ts) ts.textContent='ts: OFFLINE';
+}
+
+// ══════════════════════════════════════════════════════
+//  ALERTS
+// ══════════════════════════════════════════════════════
+function addAlert(d) {
+  const log = document.getElementById('alertsLog');
+  const empty = log.querySelector('.no-alerts'); if(empty) log.innerHTML='';
+  const sev  = d.severity||'info';
+  const time = d.timestamp ? d.timestamp.split('T')[1]?.split('+')[0]||'--:--:--' : new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const item = document.createElement('div');
+  item.className = 'ai '+sev;
+  item.innerHTML = `<div class="at">${time}</div><div><div class="ac">${d.code||'ALERT'}</div><div class="am">${d.msg||''}</div></div>`;
+  log.prepend(item);
+  while(log.children.length>50) log.removeChild(log.lastChild);
+}
+
+// ══════════════════════════════════════════════════════
+//  COMMANDS
+// ══════════════════════════════════════════════════════
+function publish(topic, payload, qos=1) {
+  if (!client||!client.connected) { showToast('MQTT not connected!',true); return; }
+  payload.timestamp = new Date().toISOString().replace('Z','+05:30');
+  client.publish(topic, JSON.stringify(payload), {qos});
+}
+function sendGlobalKill() {
+  if (!confirm('⛔ GLOBAL KILL? All slots stop immediately!')) return;
+  publish(TOPICS.stationCommands, {action:'GLOBAL_KILL'});
+  showToast('⛔ GLOBAL KILL sent');
+}
+function forceSlot(n, on) {
+  publish(TOPICS.stationCommands, {action:on?'BOOK':'STOP',slot_num:n,customer_name:on?'Admin Force':'',vehicle_number:on?'ADMIN':'',duration_mins:on?60:0});
+  showToast(`Slot ${n} Force ${on?'ON':'OFF'} sent`);
+}
+function sendVehicleCmd(id, cmd) {
+  if (id==='ALL') { ['V1','V2','V3'].forEach(v=>publish(TOPICS['v'+v.slice(1)+'Commands'],{cmd})); showToast('REBOOT ALL sent'); }
+  else { publish(TOPICS['v'+id.slice(1)+'Commands'],{cmd}); showToast(`${cmd} → ${id}`); }
+}
+
+// ══════════════════════════════════════════════════════
+//  CHARTS
+// ══════════════════════════════════════════════════════
+function pushChart(arr,val){ arr.push(val); if(arr.length>MAX_PTS) arr.shift(); }
+const cd = {
+  responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{display:false},tooltip:{enabled:true}},
+  scales:{x:{display:false},y:{grid:{color:'rgba(30,45,61,.8)'},ticks:{color:'#8b949e',font:{family:'Share Tech Mono',size:10}}}}
+};
+const powerChart = new Chart(document.getElementById('powerChart'), {
+  type:'line', data:{labels:[],datasets:[{data:[],borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.08)',borderWidth:2,fill:true,tension:.4,pointRadius:0}]},
+  options:{...cd, scales:{...cd.scales,y:{...cd.scales.y,suggestedMin:0,suggestedMax:200}}}
+});
+const socChart = new Chart(document.getElementById('socChart'), {
+  type:'line',
+  data:{labels:Array(MAX_PTS).fill(''),datasets:[
+    {label:'V1',data:[],borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.05)',borderWidth:2,fill:false,tension:.4,pointRadius:0},
+    {label:'V2',data:[],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.05)',borderWidth:2,fill:false,tension:.4,pointRadius:0},
+    {label:'V3',data:[],borderColor:'#ff6b35',backgroundColor:'rgba(255,107,53,.05)',borderWidth:2,fill:false,tension:.4,pointRadius:0},
+  ]},
+  options:{...cd,plugins:{legend:{display:true,labels:{color:'#8b949e',font:{family:'Share Tech Mono',size:9},boxWidth:18}}},
+    scales:{...cd.scales,y:{...cd.scales.y,suggestedMin:0,suggestedMax:100}}}
+});
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function showToast(msg, isError=false) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show'+(isError?' error':'');
+  setTimeout(()=>t.className='toast',3000);
+}
+function setText(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
+
+// ══════════════════════════════════════════════════════
+//  AI pricing refresh every 60s
+// ══════════════════════════════════════════════════════
+setInterval(() => { if(stationData) updatePricingUI(stationData); else updatePricingUI(null); }, 60000);
+
+// ══════════════════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════════════════
+connectMQTT();
+updatePricingUI(null); // initial render before MQTT data arrives
+</script>
+</body>
+</html>

@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EV Charge — Book a Slot</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f1a;--bg2:#111827;--bg3:#1a2234;--border:#1f2d42;
+  --accent:#3b82f6;--green:#10b981;--orange:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
+  --text:#e2e8f0;--text2:#64748b;--text3:#94a3b8;--radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:
+  radial-gradient(ellipse 600px 500px at 15% 20%,rgba(59,130,246,0.06) 0%,transparent 70%),
+  radial-gradient(ellipse 500px 400px at 85% 75%,rgba(16,185,129,0.05) 0%,transparent 70%);
+pointer-events:none;}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:rgba(10,15,26,0.92);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--green));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.brand h1{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;}
+.brand p{font-size:11px;color:var(--text2);}
+.conn-badge{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:11px;color:var(--text2);background:var(--bg2);transition:all .3s;}
+.conn-badge.ok{border-color:rgba(16,185,129,.4);color:var(--green);}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--red);}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 7px rgba(16,185,129,.6);}
+
+.page{max-width:980px;margin:0 auto;padding:24px 18px;}
+
+/* SECTION LABEL */
+.sec-label{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* STATION BAR */
+.station-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.station-info h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;}
+.station-info p{font-size:12px;color:var(--text2);margin-top:2px;}
+.station-stats{display:flex;gap:20px;flex-wrap:wrap;}
+.sstat .val{font-family:'Space Mono',monospace;font-size:17px;font-weight:700;color:var(--accent);}
+.sstat .lbl{font-size:10px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:16px;font-size:10px;font-weight:600;letter-spacing:1px;}
+.pill-online{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3);}
+.pill-online .dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pg 1.5s infinite;}
+@keyframes pg{0%,100%{opacity:1;}50%{opacity:.4;}}
+.pill-offline{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3);}
+
+/* DYNAMIC PRICING BANNER */
+.pricing-banner{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;}
+.pricing-banner.peak-mode{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04);}
+.pricing-banner.eco-mode{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.04);}
+.pb-main{grid-column:span 2;display:flex;align-items:center;gap:14px;}
+.pb-price-big{font-family:'Space Mono',monospace;font-size:32px;font-weight:700;color:var(--accent);}
+.pb-price-big.peak{color:var(--orange);}
+.pb-price-big.eco{color:var(--green);}
+.pb-info h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+.pb-info p{font-size:11px;color:var(--text2);margin-top:2px;}
+.pb-mode-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:1px;margin-top:4px;}
+.mode-peak{background:rgba(245,158,11,.15);color:var(--orange);border:1px solid rgba(245,158,11,.3);}
+.mode-normal{background:rgba(59,130,246,.12);color:var(--accent);border:1px solid rgba(59,130,246,.3);}
+.mode-eco{background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.3);}
+.pb-stat{background:var(--bg3);border-radius:10px;padding:12px;text-align:center;}
+.pb-stat .ps-val{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;}
+.pb-stat .ps-lbl{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-top:3px;}
+.ai-tip{grid-column:1/-1;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:#c4b5fd;display:flex;align-items:center;gap:8px;}
+
+/* SLOT CARDS */
+.slots-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.slot-card{border-radius:var(--radius);border:2px solid var(--border);padding:18px;cursor:pointer;transition:all .25s;background:var(--bg2);position:relative;overflow:hidden;}
+.slot-card:hover{transform:translateY(-2px);}
+.slot-card.available{border-color:rgba(59,130,246,.3);}
+.slot-card.available:hover{border-color:var(--accent);box-shadow:0 0 18px rgba(59,130,246,.15);}
+.slot-card.available.selected{border-color:var(--accent);background:rgba(59,130,246,.08);}
+.slot-card.occupied{border-color:rgba(239,68,68,.2);opacity:.75;cursor:not-allowed;}
+.slot-card.charging-card{border-color:rgba(16,185,129,.4) !important;opacity:1 !important;}
+.slot-card.booked{border-color:rgba(245,158,11,.25);opacity:.8;cursor:not-allowed;}
+.slot-card.charging-card::before{content:'';position:absolute;inset:0;border-radius:var(--radius);background:rgba(16,185,129,.04);animation:cpulse 2s ease-in-out infinite;}
+@keyframes cpulse{0%,100%{opacity:.5;}50%{opacity:1;}}
+.slot-num{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;margin-bottom:8px;}
+.slot-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;letter-spacing:.5px;margin-bottom:12px;}
+.chip-avail{background:rgba(59,130,246,.12);color:var(--accent);}
+.chip-occ{background:rgba(239,68,68,.12);color:var(--red);}
+.chip-chg{background:rgba(16,185,129,.15);color:var(--green);}
+.chip-bkd{background:rgba(245,158,11,.12);color:var(--orange);}
+.slot-meta{font-size:11px;color:var(--text2);line-height:1.8;}
+.slot-meta span{color:var(--text3);}
+.slot-price-tag{margin-top:8px;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);}
+.slot-price-tag.peak{color:var(--orange);}
+.slot-price-tag.eco{color:var(--green);}
+.select-check{position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;background:var(--accent);display:none;align-items:center;justify-content:center;color:#fff;font-size:12px;}
+.slot-card.selected .select-check{display:flex;}
+
+/* SESSION BOX */
+.session-active{background:var(--bg2);border:1px solid rgba(16,185,129,.3);border-radius:var(--radius);padding:20px 22px;margin-bottom:20px;display:none;}
+.session-active.show{display:block;}
+.sess-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.sess-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--green);}
+.sess-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+.sg{background:var(--bg3);border-radius:9px;padding:11px 13px;}
+.sg-l{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;}
+.sg-v{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;}
+.sess-bill{background:var(--bg3);border-radius:9px;padding:12px 14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.bill-item .bi-l{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+.bill-item .bi-v{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--accent);margin-top:3px;}
+.bill-item .bi-v.cost{color:var(--orange);}
+.sp-bar{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px;}
+.sp-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--green));animation:cpulse 2s ease-in-out infinite;}
+.btn-stop{width:100%;padding:11px;border:none;border-radius:9px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
+.btn-stop:hover{background:rgba(239,68,68,.25);}
+.btn-bill{flex:1;padding:10px;border:none;border-radius:9px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--accent);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;margin-right:8px;}
+.btn-bill:hover{background:rgba(59,130,246,.2);}
+
+/* AI PREDICTION SECTION */
+.ai-section{background:var(--bg2);border:1px solid rgba(139,92,246,.3);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px;}
+.ai-header{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.ai-header h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:#c4b5fd;}
+.ai-badge{background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:#a78bfa;font-size:9px;letter-spacing:1.5px;padding:2px 8px;border-radius:4px;font-weight:700;}
+.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
+.ai-card{background:var(--bg3);border-radius:10px;padding:12px 14px;border:1px solid var(--border);}
+.ai-card .ac-icon{font-size:20px;margin-bottom:6px;}
+.ai-card .ac-val{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--text);}
+.ai-card .ac-lbl{font-size:10px;color:var(--text2);margin-top:3px;}
+.ai-rec{background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2);border-radius:8px;padding:10px 14px;font-size:12px;color:#ddd6fe;line-height:1.6;}
+.ai-rec strong{color:#c4b5fd;}
+
+/* BOOKING FORM */
+.booking-form{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:22px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.5px;}
+.field input,.field select{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px 13px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.slot-disp{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px 13px;font-size:13px;color:var(--text2);}
+.slot-disp.has{border-color:rgba(59,130,246,.4);color:var(--accent);font-family:'Space Mono',monospace;}
+.btn-book{width:100%;padding:14px;border:none;border-radius:11px;background:linear-gradient(135deg,var(--accent),#1d4ed8);color:#fff;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .2s;margin-top:14px;position:relative;overflow:hidden;}
+.btn-book:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(59,130,246,.3);}
+.btn-book:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.no-slot-warn{text-align:center;font-size:12px;color:var(--orange);margin-top:8px;display:none;}
+.price-preview{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px 14px;font-size:12px;color:var(--text2);margin-top:10px;display:flex;justify-content:space-between;align-items:center;}
+.price-preview .est{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--orange);}
+
+/* VEHICLE STRIP */
+.vstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+.vcard{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;}
+.vid{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--accent);min-width:32px;}
+.vinfo{flex:1;}
+.vinfo-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:4px;}
+.vbar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.vfill{height:100%;border-radius:2px;transition:width .8s;background:linear-gradient(90deg,var(--accent),var(--green));}
+.vfill.low{background:linear-gradient(90deg,var(--red),var(--orange));}
+.vstatus{font-size:9px;font-weight:700;margin-top:4px;letter-spacing:.5px;text-transform:uppercase;}
+.vstatus.charging{color:var(--green);}
+.vstatus.idle{color:var(--text2);}
+.vstatus.offline{color:var(--red);}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg2);border:1px solid var(--accent);border-radius:11px;padding:12px 22px;font-size:13px;font-weight:500;color:var(--text);z-index:9999;opacity:0;transition:all .35s;text-align:center;min-width:240px;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.success{border-color:var(--green);color:var(--green);}
+.toast.error{border-color:var(--red);color:var(--red);}
+.toast.warn{border-color:var(--orange);color:var(--orange);}
+
+/* LOADING */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(10,15,26,.8);z-index:9990;align-items:center;justify-content:center;flex-direction:column;gap:12px;}
+.loading-overlay.show{display:flex;}
+.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* BILL MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9980;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:420px;width:90%;max-height:90vh;overflow-y:auto;}
+.modal h3{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;margin-bottom:16px;color:var(--green);}
+.bill-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.bill-row:last-of-type{border-bottom:none;font-weight:700;font-size:14px;color:var(--accent);}
+.bill-row .bk{color:var(--text2);}
+.modal-close{width:100%;margin-top:16px;padding:11px;border:none;border-radius:9px;background:var(--bg3);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border:1px solid var(--border);}
+
+@media(max-width:640px){
+  .slots-row,.vstrip,.form-grid,.sess-grid,.sess-bill,.ai-grid,.pricing-banner{grid-template-columns:1fr 1fr;}
+  .pricing-banner{grid-template-columns:1fr 1fr;}
+  .pb-main{grid-column:1/-1;}
+  .ai-tip{grid-column:1/-1;}
+  .station-bar{flex-direction:column;align-items:flex-start;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">⚡</div>
+    <div><h1>EV Charge</h1><p>Pune Hub 01</p></div>
+  </div>
+  <div class="conn-badge" id="connBadge">
+    <div class="conn-dot" id="connDot"></div>
+    <span id="connLabel">Connecting...</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- STATION BAR -->
+  <div class="station-bar">
+    <div class="station-info">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <h2>Pune Hub 01</h2>
+        <span class="pill pill-online" id="stationPill"><span class="dot"></span> ONLINE</span>
+      </div>
+      <p id="stationSubtitle">3 Slots · Smart Charging · AI Pricing Active</p>
+    </div>
+    <div class="station-stats">
+      <div class="sstat"><div class="val" id="hdrPower">-- W</div><div class="lbl">Station Power</div></div>
+      <div class="sstat"><div class="val" id="hdrSlots" style="color:var(--green);">-/3</div><div class="lbl">Active Slots</div></div>
+      <div class="sstat"><div class="val" id="hdrTemp" style="color:var(--orange);">--°C</div><div class="lbl">Temp</div></div>
+    </div>
+  </div>
+
+  <!-- DYNAMIC PRICING BANNER -->
+  <div class="sec-label">🤖 AI Dynamic Pricing</div>
+  <div class="pricing-banner" id="pricingBanner">
+    <div class="pb-main">
+      <div class="pb-price-big" id="pbPrice">₹10.00</div>
+      <div class="pb-info">
+        <h3>Current Rate / kWh</h3>
+        <p id="pbReason">Calculating pricing factors...</p>
+        <span class="pb-mode-badge mode-normal" id="pbModeBadge">NORMAL</span>
+      </div>
+    </div>
+    <div class="pb-stat">
+      <div class="ps-val" id="pbLoad" style="color:var(--accent);">--%</div>
+      <div class="ps-lbl">Load Level</div>
+    </div>
+    <div class="pb-stat">
+      <div class="ps-val" id="pbNextPrice" style="color:var(--text2);">₹--</div>
+      <div class="ps-lbl">Next Hr Est.</div>
+    </div>
+    <div class="ai-tip" id="aiTip">
+      🧠 <span id="aiTipText">Connecting to AI pricing engine...</span>
+    </div>
+  </div>
+
+  <!-- SLOT CARDS -->
+  <div class="sec-label">Select a Slot</div>
+  <div class="slots-row" id="slotsRow">
+    <div class="slot-card available" id="slotCard_1" onclick="selectSlot(1)">
+      <div class="select-check">✓</div>
+      <div class="slot-num">01</div>
+      <div class="slot-chip chip-avail" id="slotChip_1">● Available</div>
+      <div class="slot-meta" id="slotMeta_1">EV1 · 12V 5A<br><span>Tap to select</span></div>
+      <div class="slot-price-tag" id="slotPrice_1">₹10.00/kWh</div>
+    </div>
+    <div class="slot-card available" id="slotCard_2" onclick="selectSlot(2)">
+      <div class="select-check">✓</div>
+      <div class="slot-num">02</div>
+      <div class="slot-chip chip-avail" id="slotChip_2">● Available</div>
+      <div class="slot-meta" id="slotMeta_2">EV2 · 12V 3.5A<br><span>Tap to select</span></div>
+      <div class="slot-price-tag" id="slotPrice_2">₹10.00/kWh</div>
+    </div>
+    <div class="slot-card available" id="slotCard_3" onclick="selectSlot(3)">
+      <div class="select-check">✓</div>
+      <div class="slot-num">03</div>
+      <div class="slot-chip chip-avail" id="slotChip_3">● Available</div>
+      <div class="slot-meta" id="slotMeta_3">EV3 · 12V 2.2A<br><span>Tap to select</span></div>
+      <div class="slot-price-tag" id="slotPrice_3">₹10.00/kWh</div>
+    </div>
+  </div>
+
+  <!-- ACTIVE SESSION -->
+  <div class="session-active" id="sessionBox">
+    <div class="sess-hdr">
+      <div class="sess-title">⚡ Your Active Session</div>
+      <div style="font-size:11px;color:var(--text2);" id="sessionSlotLabel">Slot —</div>
+    </div>
+    <div class="sess-grid">
+      <div class="sg"><div class="sg-l">Customer</div><div class="sg-v" id="sessCust">—</div></div>
+      <div class="sg"><div class="sg-l">Vehicle No.</div><div class="sg-v" id="sessVeh">—</div></div>
+      <div class="sg"><div class="sg-l">Elapsed</div><div class="sg-v" id="sessElapsed" style="color:var(--accent);">0 min</div></div>
+      <div class="sg"><div class="sg-l">Charging</div><div class="sg-v" id="sessChargingStatus" style="color:var(--green);">—</div></div>
+    </div>
+    <!-- BILLING PANEL -->
+    <div class="sess-bill">
+      <div class="bill-item"><div class="bi-l">Rate/kWh</div><div class="bi-v" id="sessRate">₹--</div></div>
+      <div class="bill-item"><div class="bi-l">Energy (kWh)</div><div class="bi-v" id="sessEnergy">-- kWh</div></div>
+      <div class="bill-item"><div class="bi-l">Session Cost</div><div class="bi-v cost" id="sessCost">₹--</div></div>
+      <div class="bill-item"><div class="bi-l">Est. Final Cost</div><div class="bi-v cost" id="sessEstCost">₹--</div></div>
+    </div>
+    <div class="sp-bar"><div class="sp-fill" id="sessFill"></div></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-bill" onclick="showBill()">🧾 Generate Bill</button>
+      <button class="btn-stop" onclick="stopMySession()" style="flex:1;">⛔ Stop Charging</button>
+    </div>
+  </div>
+
+  <!-- VEHICLE STATUS -->
+  <div class="sec-label">Vehicle Battery Status</div>
+  <div class="vstrip">
+    <div class="vcard" id="vstrip_V1">
+      <div class="vid">V1</div>
+      <div class="vinfo">
+        <div class="vinfo-row"><span>SOC</span><span id="vsoc_V1">--%</span></div>
+        <div class="vbar"><div class="vfill" id="vfill_V1" style="width:0%"></div></div>
+        <div class="vstatus offline" id="vsstat_V1">OFFLINE</div>
+      </div>
+    </div>
+    <div class="vcard" id="vstrip_V2">
+      <div class="vid" style="color:var(--green);">V2</div>
+      <div class="vinfo">
+        <div class="vinfo-row"><span>SOC</span><span id="vsoc_V2">--%</span></div>
+        <div class="vbar"><div class="vfill" id="vfill_V2" style="width:0%"></div></div>
+        <div class="vstatus offline" id="vsstat_V2">OFFLINE</div>
+      </div>
+    </div>
+    <div class="vcard" id="vstrip_V3">
+      <div class="vid" style="color:var(--orange);">V3</div>
+      <div class="vinfo">
+        <div class="vinfo-row"><span>SOC</span><span id="vsoc_V3">--%</span></div>
+        <div class="vbar"><div class="vfill" id="vfill_V3" style="width:0%"></div></div>
+        <div class="vstatus offline" id="vsstat_V3">OFFLINE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI PREDICTION SECTION -->
+  <div class="sec-label">🧠 AI Load Prediction</div>
+  <div class="ai-section">
+    <div class="ai-header">
+      <h3>AI Forecast — Next 60 Minutes</h3>
+      <span class="ai-badge">LIVE</span>
+    </div>
+    <div class="ai-grid">
+      <div class="ai-card">
+        <div class="ac-icon">📊</div>
+        <div class="ac-val" id="aiPredLoad">-- W</div>
+        <div class="ac-lbl">Predicted Load (1hr)</div>
+      </div>
+      <div class="ai-card">
+        <div class="ac-icon">⏰</div>
+        <div class="ac-val" id="aiPeakTime">--:--</div>
+        <div class="ac-lbl">Peak Demand Time</div>
+      </div>
+      <div class="ai-card">
+        <div class="ac-icon">🕐</div>
+        <div class="ac-val" id="aiWaitTime">-- min</div>
+        <div class="ac-lbl">Predicted Wait</div>
+      </div>
+    </div>
+    <div class="ai-rec" id="aiRecommendation">
+      🧠 <strong>AI:</strong> Connecting and analyzing station data...
+    </div>
+  </div>
+
+  <!-- BOOKING FORM -->
+  <div class="sec-label">Booking Details</div>
+  <div class="booking-form">
+    <div class="form-grid">
+      <div class="field">
+        <label>YOUR NAME</label>
+        <input type="text" id="custName" placeholder="e.g. Rahul Kumar" maxlength="40">
+      </div>
+      <div class="field">
+        <label>VEHICLE NUMBER</label>
+        <input type="text" id="vehNum" placeholder="e.g. MH14AB1234" maxlength="15" style="text-transform:uppercase;">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>SELECTED SLOT</label>
+        <div class="slot-disp" id="selectedSlotDisplay">— Tap a slot above to select —</div>
+      </div>
+    </div>
+    <div class="price-preview">
+      <span>Estimated cost for 60 min:</span>
+      <span class="est" id="estCostPreview">Select a slot</span>
+    </div>
+    <button class="btn-book" id="bookBtn" onclick="bookSlot()">⚡ Book &amp; Start Charging</button>
+    <div class="no-slot-warn" id="noSlotWarn">⚠ Please select an available slot first</div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="color:var(--text2);font-size:13px;letter-spacing:1px;">Sending booking...</div>
+</div>
+
+<!-- BILL MODAL -->
+<div class="modal-overlay" id="billModal">
+  <div class="modal">
+    <h3>🧾 Charging Bill</h3>
+    <div id="billContent"></div>
+    <button class="modal-close" onclick="document.getElementById('billModal').classList.remove('show')">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════
+const MQTT_HOST      = 'wss://dd4770b26a7d4a7291371cea6d74c060.s1.eu.hivemq.cloud:8884/mqtt';
+const MQTT_USER      = 'admin';
+const MQTT_PASS      = 'Pass@123';
+const TOPIC_STATION  = 'ev_station/telemetry';
+const TOPIC_BOOKINGS = 'ev_station/bookings';
+const TOPIC_V1       = 'ev_vehicle/v1/telemetry';
+const TOPIC_V2       = 'ev_vehicle/v2/telemetry';
+const TOPIC_V3       = 'ev_vehicle/v3/telemetry';
+const SESSION_KEY    = 'ev_user_session_v3';
+
+// EV specs per slot
+const EV_SPECS = {
+  1: { name:'EV1', voltage:12, maxCurrent:5,   maxW:60  },
+  2: { name:'EV2', voltage:12, maxCurrent:3.5, maxW:42  },
+  3: { name:'EV3', voltage:12, maxCurrent:2.2, maxW:26.4},
+};
+const STATION_MAX_W = 128.4; // 60+42+26.4
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let client        = null;
+let selectedSlot  = null;
+let mySession     = null;
+let stationOnline = false;
+let stationTimeout= null;
+let slotStates    = {1:'available',2:'available',3:'available'};
+let slotData      = {};
+let stationRaw    = null;
+let currentPrice  = 10;    // ₹/kWh — updated by AI engine
+let pricingMode   = 'normal';
+
+// ══════════════════════════════════════════════════════
+//  AI DYNAMIC PRICING ENGINE
+//  Factors: time-of-day, total load %, slot occupancy, grid
+// ══════════════════════════════════════════════════════
+function computeDynamicPrice(stationData) {
+  const BASE_PRICE = 10;
+  const hour = new Date().getHours();
+  const totalPower  = stationData?.station_power || 0;
+  const activeSlots = stationData?.active_slots  || 0;
+  const loadPct     = Math.min(100, (totalPower / STATION_MAX_W) * 100);
+
+  let price     = BASE_PRICE;
+  let mode      = 'normal';
+  let reasons   = [];
+  let surcharge = 0;
+
+  // 1. Time-of-day factor
+  if (hour >= 18 && hour <= 22) {
+    surcharge += 3; reasons.push('+₹3 peak hour (6–10PM)');
+    mode = 'peak';
+  } else if (hour >= 23 || hour <= 5) {
+    surcharge -= 2; reasons.push('–₹2 off-peak discount (11PM–6AM)');
+    mode = 'eco';
+  } else if (hour >= 9 && hour <= 12) {
+    surcharge += 1; reasons.push('+₹1 morning surge');
+  }
+
+  // 2. Load factor
+  if (loadPct > 80) {
+    surcharge += 2; reasons.push('+₹2 high load (' + loadPct.toFixed(0) + '%)');
+    mode = 'peak';
+  } else if (loadPct < 40) {
+    surcharge -= 1; reasons.push('–₹1 low load discount');
+    if (mode !== 'peak') mode = 'eco';
+  }
+
+  // 3. Slot occupancy factor
+  if (activeSlots === 3) {
+    surcharge += 2; reasons.push('+₹2 all slots occupied');
+    mode = 'peak';
+  } else if (activeSlots === 0) {
+    surcharge -= 1; reasons.push('–₹1 no active sessions');
+    if (mode !== 'peak') mode = 'eco';
+  }
+
+  price = Math.max(7, Math.min(18, BASE_PRICE + surcharge));
+
+  // Predict next hour price (simple: check if hour+1 is peak)
+  const nextHour = (hour + 1) % 24;
+  let nextPrice  = BASE_PRICE;
+  if (nextHour >= 18 && nextHour <= 22) nextPrice = BASE_PRICE + 3;
+  else if (nextHour >= 23 || nextHour <= 5) nextPrice = BASE_PRICE - 2;
+
+  // AI recommendation text
+  let aiRec = '🧠 <strong>AI:</strong> ';
+  if (mode === 'peak') {
+    aiRec += `Peak demand detected. Current rate <strong>₹${price.toFixed(2)}/kWh</strong>. `;
+    aiRec += reasons.join(', ') + '. Consider charging after 10PM for cheaper rates.';
+  } else if (mode === 'eco') {
+    aiRec += `Off-peak / low load. Rate dropped to <strong>₹${price.toFixed(2)}/kWh</strong>. `;
+    aiRec += reasons.join(', ') + '. Great time to charge!';
+  } else {
+    aiRec += `Stable grid. Rate <strong>₹${price.toFixed(2)}/kWh</strong> (base). ${reasons.join(', ') || 'No surcharge factors active.'}`;
+  }
+
+  // Predicted next-hour load
+  const avgPow = totalPower;
+  const predLoad = mode === 'peak' ? avgPow * 1.2 : (mode === 'eco' ? avgPow * 0.85 : avgPow * 1.05);
+
+  // Wait time: if no slots free and all 3 occupied, estimate based on remaining_mins
+  let minRemaining = 999;
+  [1,2,3].forEach(n => {
+    if (slotData[n] && slotData[n].remaining_mins > 0) {
+      minRemaining = Math.min(minRemaining, slotData[n].remaining_mins);
+    }
+  });
+  const waitTime = (activeSlots < 3) ? 0 : (minRemaining === 999 ? 0 : minRemaining);
+
+  // Peak time prediction
+  const peakTime = (hour < 18) ? '18:00' : (hour < 22) ? (hour+1)+':00' : '06:00';
+
+  return { price, mode, reasons, aiRec, nextPrice, predLoad, waitTime, peakTime, loadPct };
+}
+
+function updatePricingUI(d) {
+  const result = computeDynamicPrice(d);
+  currentPrice = result.price;
+  pricingMode  = result.mode;
+
+  // Banner
+  const banner = document.getElementById('pricingBanner');
+  banner.className = 'pricing-banner ' + (result.mode === 'peak' ? 'peak-mode' : result.mode === 'eco' ? 'eco-mode' : '');
+
+  const priceEl = document.getElementById('pbPrice');
+  priceEl.textContent = '₹' + result.price.toFixed(2);
+  priceEl.className   = 'pb-price-big ' + result.mode;
+
+  const modeMap = { peak:'mode-peak', normal:'mode-normal', eco:'mode-eco' };
+  const modeLabel = { peak:'⚡ PEAK', normal:'◉ NORMAL', eco:'🌙 ECO' };
+  document.getElementById('pbModeBadge').className   = 'pb-mode-badge ' + modeMap[result.mode];
+  document.getElementById('pbModeBadge').textContent = modeLabel[result.mode];
+  document.getElementById('pbReason').textContent    = result.reasons.length ? result.reasons[0] : 'Base rate';
+  document.getElementById('pbLoad').textContent      = result.loadPct.toFixed(0) + '%';
+  document.getElementById('pbNextPrice').textContent = '₹' + result.nextPrice.toFixed(2);
+  document.getElementById('aiTipText').innerHTML     = result.aiRec.replace('🧠 <strong>AI:</strong> ', '');
+
+  // AI section
+  document.getElementById('aiPredLoad').textContent  = result.predLoad.toFixed(1) + ' W';
+  document.getElementById('aiPeakTime').textContent  = result.peakTime;
+  document.getElementById('aiWaitTime').textContent  = result.waitTime + ' min';
+  document.getElementById('aiRecommendation').innerHTML = result.aiRec;
+
+  // Slot price tags
+  [1,2,3].forEach(n => {
+    const ptEl = document.getElementById('slotPrice_' + n);
+    if (ptEl) {
+      ptEl.textContent = '₹' + currentPrice.toFixed(2) + '/kWh';
+      ptEl.className   = 'slot-price-tag ' + (result.mode !== 'normal' ? result.mode : '');
+    }
+  });
+
+  // Update cost preview if slot selected
+  updateCostPreview();
+
+  // Update session bill if active
+  if (mySession) updateSessionBilling();
+}
+
+// ══════════════════════════════════════════════════════
+//  BILLING CALCULATION
+// ══════════════════════════════════════════════════════
+function calcSessionCost(slotNum, energyWh, elapsedMin) {
+  const rate    = mySession?.lockedRate || currentPrice;
+  const energyK = energyWh / 1000; // Wh → kWh
+  const cost    = energyK * rate;
+  // Estimate remaining cost: current power * remaining time
+  const specs   = EV_SPECS[slotNum] || {maxW:50};
+  const remMin  = Math.max(0, 60 - elapsedMin);
+  const estRem  = (specs.maxW * (remMin / 60)) / 1000 * rate;
+  return { cost: cost.toFixed(2), estFinal: (cost + estRem).toFixed(2), rate };
+}
+
+function updateSessionBilling() {
+  if (!mySession) return;
+  const s = slotData[mySession.slotNum] || {};
+  const elapsedMin = Math.floor((Date.now() - mySession.startMs) / 60000);
+  const energyWh   = s.energy_wh || 0;
+  const { cost, estFinal, rate } = calcSessionCost(mySession.slotNum, energyWh, elapsedMin);
+  document.getElementById('sessRate').textContent    = '₹' + rate.toFixed(2) + '/kWh';
+  document.getElementById('sessEnergy').textContent  = (energyWh/1000).toFixed(4) + ' kWh';
+  document.getElementById('sessCost').textContent    = '₹' + cost;
+  document.getElementById('sessEstCost').textContent = '₹' + estFinal;
+}
+
+function updateCostPreview() {
+  const el = document.getElementById('estCostPreview');
+  if (!selectedSlot) { el.textContent = 'Select a slot'; return; }
+  const specs = EV_SPECS[selectedSlot];
+  const estWh = specs.maxW * (60/60); // 60 min at max power
+  const estKwh= estWh / 1000;
+  el.textContent = '≈ ₹' + (estKwh * currentPrice).toFixed(2) + ' (60 min, max load)';
+  el.className   = 'est ' + (pricingMode !== 'normal' ? pricingMode : '');
+}
+
+// ══════════════════════════════════════════════════════
+//  BILL MODAL
+// ══════════════════════════════════════════════════════
+function showBill() {
+  if (!mySession) return;
+  const s       = slotData[mySession.slotNum] || {};
+  const elapsed = Math.floor((Date.now() - mySession.startMs) / 60000);
+  const energyWh= s.energy_wh || 0;
+  const { cost, estFinal, rate } = calcSessionCost(mySession.slotNum, energyWh, elapsed);
+  const specs   = EV_SPECS[mySession.slotNum] || {};
+  const now     = new Date().toLocaleString('en-IN');
+
+  document.getElementById('billContent').innerHTML = `
+    <div class="bill-row"><span class="bk">Booking Time</span><span>${mySession.bookedAt || now}</span></div>
+    <div class="bill-row"><span class="bk">Customer</span><span>${mySession.customerName}</span></div>
+    <div class="bill-row"><span class="bk">Vehicle No.</span><span>${mySession.vehicleNumber}</span></div>
+    <div class="bill-row"><span class="bk">Slot</span><span>Slot 0${mySession.slotNum} — ${specs.name || ''}</span></div>
+    <div class="bill-row"><span class="bk">Duration</span><span>${elapsed} minutes</span></div>
+    <div class="bill-row"><span class="bk">Energy Consumed</span><span>${(energyWh/1000).toFixed(4)} kWh</span></div>
+    <div class="bill-row"><span class="bk">Rate Applied</span><span>₹${rate.toFixed(2)}/kWh (${pricingMode.toUpperCase()})</span></div>
+    <div class="bill-row"><span class="bk">Session Cost</span><span>₹${cost}</span></div>
+    <div class="bill-row"><span class="bk">Estimated Final</span><span>₹${estFinal}</span></div>
+    <div class="bill-row"><span class="bk">Payment Status</span><span style="color:var(--orange);">⏳ PENDING</span></div>
+    <div class="bill-row"><span class="bk">TOTAL PAYABLE</span><span>₹${cost}</span></div>
+  `;
+  document.getElementById('billModal').classList.add('show');
+}
+
+// ══════════════════════════════════════════════════════
+//  SESSION STORAGE
+// ══════════════════════════════════════════════════════
+function saveSession(s) {
+  try { s ? localStorage.setItem(SESSION_KEY, JSON.stringify(s)) : localStorage.removeItem(SESSION_KEY); }
+  catch(e){}
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s?.startMs || (Date.now() - s.startMs) > 90*60000) { localStorage.removeItem(SESSION_KEY); return null; }
+    return s;
+  } catch(e){ return null; }
+}
+
+// ══════════════════════════════════════════════════════
+//  MQTT
+// ══════════════════════════════════════════════════════
+function connectMQTT() {
+  const opts = { username:MQTT_USER, password:MQTT_PASS, clientId:'user_'+Math.random().toString(16).slice(2,8), clean:true, reconnectPeriod:4000, connectTimeout:10000 };
+  client = mqtt.connect(MQTT_HOST, opts);
+  client.on('connect', () => {
+    setConn(true);
+    client.subscribe(TOPIC_STATION, {qos:1});
+    client.subscribe(TOPIC_V1,      {qos:1});
+    client.subscribe(TOPIC_V2,      {qos:1});
+    client.subscribe(TOPIC_V3,      {qos:1});
+  });
+  client.on('message', (topic, payload) => {
+    try {
+      const d = JSON.parse(payload.toString());
+      if (topic === TOPIC_STATION) handleStation(d);
+      else if (topic === TOPIC_V1) handleVehicle('V1', d);
+      else if (topic === TOPIC_V2) handleVehicle('V2', d);
+      else if (topic === TOPIC_V3) handleVehicle('V3', d);
+    } catch(e){}
+  });
+  client.on('disconnect', () => setConn(false));
+  client.on('error',      () => setConn(false));
+  client.on('offline',    () => setConn(false));
+}
+
+function setConn(ok) {
+  document.getElementById('connDot').className    = 'conn-dot' + (ok?' ok':'');
+  document.getElementById('connBadge').className  = 'conn-badge' + (ok?' ok':'');
+  document.getElementById('connLabel').textContent = ok ? 'Live' : 'Connecting...';
+}
+
+// ══════════════════════════════════════════════════════
+//  STATION HANDLER
+// ══════════════════════════════════════════════════════
+function handleStation(d) {
+  stationRaw    = d;
+  stationOnline = true;
+  resetStationTimeout();
+
+  document.getElementById('hdrPower').textContent = (d.station_power||0).toFixed(1) + ' W';
+  document.getElementById('hdrSlots').textContent = (d.active_slots||0) + '/3';
+  document.getElementById('hdrTemp').textContent  = (d.internal_temp_c||0).toFixed(1) + '°C';
+  document.getElementById('stationSubtitle').textContent =
+    `3 Slots · ${(d.station_power||0).toFixed(1)}W · Temp:${(d.internal_temp_c||0).toFixed(1)}°C · Backup:${d.backup_battery_active?'ACTIVE':'Standby'}`;
+
+  const pill = document.getElementById('stationPill');
+  pill.className = 'pill pill-online';
+  pill.innerHTML = '<span class="dot"></span> ONLINE';
+
+  const slots = d.slots || {};
+  ['Slot-01','Slot-02','Slot-03'].forEach((k, i) => {
+    const n = i+1; const s = slots[k] || {};
+    slotData[n] = s; updateSlotCard(n, s);
+  });
+
+  // Update AI pricing
+  updatePricingUI(d);
+
+  if (mySession) refreshMySession();
+}
+
+function updateSlotCard(n, s) {
+  const rawStatus = (s.status||'Available').toLowerCase();
+  const charging  = !!s.charging;
+
+  if (mySession && mySession.slotNum === n) {
+    slotStates[n] = 'occupied';
+    const el = document.getElementById('sessChargingStatus');
+    if (el) { el.textContent = charging ? '⚡ Charging' : '⏸ Relay OFF'; el.style.color = charging ? 'var(--green)' : 'var(--orange)'; }
+    return;
+  }
+
+  slotStates[n] = rawStatus;
+  const card = document.getElementById('slotCard_' + n);
+  const chip = document.getElementById('slotChip_' + n);
+  const meta = document.getElementById('slotMeta_' + n);
+  const specs = EV_SPECS[n];
+  card.classList.remove('available','occupied','charging-card','booked');
+
+  if (rawStatus === 'available') {
+    card.classList.add('available');
+    chip.className  = 'slot-chip chip-avail'; chip.textContent = '● Available';
+    meta.innerHTML  = `${specs.name} · ${specs.voltage}V ${specs.maxCurrent}A<br><span>Tap to select</span>`;
+  } else if (rawStatus === 'occupied') {
+    if (charging) { card.classList.add('occupied','charging-card'); chip.className='slot-chip chip-chg'; chip.textContent='⚡ Charging'; }
+    else          { card.classList.add('occupied');                 chip.className='slot-chip chip-occ'; chip.textContent='● Occupied'; }
+    const rem = s.remaining_mins || 0;
+    meta.innerHTML = `${s.customer||'In use'}<br><span>~${rem} min left</span>`;
+    if (selectedSlot === n) { selectedSlot = null; updateSelectedDisplay(); }
+  } else if (rawStatus === 'booked') {
+    card.classList.add('booked');
+    chip.className  = 'slot-chip chip-bkd'; chip.textContent = '● Booked';
+    meta.innerHTML  = `Reserved${s.customer?' for '+s.customer:''}<br><span>Not available</span>`;
+    if (selectedSlot === n) { selectedSlot = null; updateSelectedDisplay(); }
+  }
+}
+
+function handleVehicle(id, d) {
+  const soc = d.soc||0;
+  document.getElementById('vsoc_'+id).textContent = soc+'%';
+  const fill = document.getElementById('vfill_'+id);
+  fill.style.width = soc+'%'; fill.className = 'vfill'+(soc<20?' low':'');
+  const stat = document.getElementById('vsstat_'+id);
+  const status = (d.status||'idle').toLowerCase();
+  stat.className = 'vstatus '+status; stat.textContent = status.toUpperCase();
+}
+
+// ══════════════════════════════════════════════════════
+//  SLOT SELECTION
+// ══════════════════════════════════════════════════════
+function selectSlot(n) {
+  if (slotStates[n] !== 'available') { showToast('This slot is not available','warn'); return; }
+  if (mySession) { showToast('You already have an active session','warn'); return; }
+  selectedSlot = (selectedSlot === n) ? null : n;
+  updateSelectedDisplay();
+  updateCostPreview();
+}
+
+function updateSelectedDisplay() {
+  for (let i=1;i<=3;i++) {
+    const card = document.getElementById('slotCard_'+i);
+    if (slotStates[i]==='available') card.classList.toggle('selected', selectedSlot===i);
+  }
+  const disp = document.getElementById('selectedSlotDisplay');
+  if (selectedSlot) {
+    disp.className = 'slot-disp has';
+    disp.textContent = `Slot 0${selectedSlot} — ${EV_SPECS[selectedSlot].name} · ${EV_SPECS[selectedSlot].voltage}V ${EV_SPECS[selectedSlot].maxCurrent}A ✓`;
+  } else {
+    disp.className = 'slot-disp'; disp.textContent = '— Tap a slot above to select —';
+  }
+  document.getElementById('noSlotWarn').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  BOOKING
+// ══════════════════════════════════════════════════════
+function bookSlot() {
+  if (!selectedSlot) { document.getElementById('noSlotWarn').style.display='block'; return; }
+  if (!client||!client.connected) { showToast('Not connected','error'); return; }
+  const name = document.getElementById('custName').value.trim();
+  const veh  = document.getElementById('vehNum').value.trim().toUpperCase();
+  if (!name) { showToast('Please enter your name','warn'); return; }
+  if (!veh)  { showToast('Please enter vehicle number','warn'); return; }
+
+  document.getElementById('loadingOverlay').classList.add('show');
+  const isoTs = new Date().toISOString().replace('Z','+05:30');
+  const payload = {
+    action:'BOOK', slot_num:selectedSlot,
+    customer_name:name, vehicle_number:veh, duration_mins:60,
+    timestamp:isoTs, price_rate:currentPrice, pricing_mode:pricingMode,
+  };
+  client.publish(TOPIC_BOOKINGS, JSON.stringify(payload), {qos:1}, (err) => {
+    document.getElementById('loadingOverlay').classList.remove('show');
+    if (err) { showToast('Booking failed! Try again.','error'); return; }
+    mySession = {
+      slotNum:selectedSlot, customerName:name, vehicleNumber:veh,
+      startMs:Date.now(), bookedAt:isoTs,
+      lockedRate:currentPrice, pricingMode,
+    };
+    saveSession(mySession);
+    showToast('✓ Booking confirmed! Charging started.','success');
+    selectedSlot=null; updateSelectedDisplay(); updateCostPreview();
+    showSessionBox();
+    document.getElementById('custName').value='';
+    document.getElementById('vehNum').value='';
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  SESSION BOX
+// ══════════════════════════════════════════════════════
+function showSessionBox() {
+  if (!mySession) return;
+  document.getElementById('sessionBox').classList.add('show');
+  document.getElementById('sessionSlotLabel').textContent = 'Slot 0'+mySession.slotNum;
+  document.getElementById('sessCust').textContent = mySession.customerName;
+  document.getElementById('sessVeh').textContent  = mySession.vehicleNumber;
+  refreshMySession();
+}
+
+function refreshMySession() {
+  if (!mySession) return;
+  const elapsedMin = Math.floor((Date.now()-mySession.startMs)/60000);
+  document.getElementById('sessElapsed').textContent = elapsedMin+' min';
+  updateSessionBilling();
+  const slotStatus = slotStates[mySession.slotNum];
+  if (slotStatus === 'available') { clearMySession(); showToast('Charging session ended.','success'); }
+}
+
+function clearMySession() {
+  mySession = null; saveSession(null);
+  document.getElementById('sessionBox').classList.remove('show');
+}
+
+function stopMySession() {
+  if (!mySession) return;
+  if (!confirm('Stop charging for Slot '+mySession.slotNum+'?')) return;
+  if (client&&client.connected) {
+    client.publish(TOPIC_BOOKINGS, JSON.stringify({
+      action:'STOP', slot_num:mySession.slotNum,
+      timestamp:new Date().toISOString().replace('Z','+05:30'),
+    }), {qos:1});
+  }
+  clearMySession(); showToast('Charging stopped.','success');
+}
+
+setInterval(() => { if (mySession) refreshMySession(); }, 10000);
+
+// ══════════════════════════════════════════════════════
+//  STATION OFFLINE TIMEOUT
+// ══════════════════════════════════════════════════════
+function resetStationTimeout() {
+  if (stationTimeout) clearTimeout(stationTimeout);
+  stationTimeout = setTimeout(() => {
+    stationOnline = false;
+    const pill = document.getElementById('stationPill');
+    pill.className = 'pill pill-offline'; pill.innerHTML = '● OFFLINE';
+  }, 8000);
+}
+
+// Run AI pricing update every 60 sec even without new MQTT data
+setInterval(() => { if (stationRaw) updatePricingUI(stationRaw); }, 60000);
+
+// ══════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className='toast show'+(type?' '+type:'');
+  setTimeout(() => t.className='toast', 3500);
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+function init() {
+  const saved = loadSession();
+  if (saved) { mySession = saved; showSessionBox(); showToast('Session restored — Slot '+saved.slotNum,'success'); }
+  connectMQTT();
+  // Initial pricing render with no data
+  updatePricingUI(null);
+}
+init();
+</script>
+</body>
+</html>
